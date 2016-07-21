@@ -1,0 +1,192 @@
+---
+title: "Forecasting Time Series Data"
+author: "James Muguira"
+date: "May 6, 2016"
+output: 
+  html_document: 
+    highlight: haddock
+    theme: cosmo
+---
+
+# Synopsis
+
+```{r, echo=FALSE, results='hide'}
+library(TTR)
+library(fpp)
+```
+
+R contains a number of packages to handle time series data. R can also facilitate forecasting against that data. The body of knowledge of forecasting time series is both broad and deep.  Many pit falls await the impatient or naive modeler.
+
+Time series appear in a great many situations including:
+
+* Scientific applications (signal processing, experiemental data capture, etc.)
+* Economics applications (financial, accounting, mnanagement, etc.)
+* Stock markets
+* Process control
+* Utilities
+* Census Analysis
+
+A time series (in a business context) is a sequence of data that follows a general pattern:
+
+* there is a time component
+* there is a periodic function that depends on the time component
+* there is a random component
+* there might be a trend component
+* there might be a seasonal component
+* there might be a cyclic component
+
+This pattern leads to a specification of a time series:
+
+$$X_t = S_t + Random_t + trend_t + seasonal_t + cyclic_t$$
+
+One of the challenging aspects of forecasting time series data is choosing the period function that best models the data in question. This essay will discussion some of the issues involved. 
+Before you can arrive at a forecast you have to identify and remove the trend, seasonal and cyclic components of the time series.  Once these have been identified and compensated for a suitable periodic function is choosen and the act of forecasting can begin.
+
+# Methods
+
+A general approach to forecasting is the following:
+
+1. Plot the time series and inspect that plot to identify:
+* Trends
+* Seasonal components
+* Cyclic components
+* Sharp changes in behaviour
+* Any outlying observations (Brockwell, Davis, 2002).
+
+2. Remove trends, seasonal and cyclic components in an effort to create a stationary version of the series (I will define stationary in the next section). This step involves applying a series of transformations to the data.
+
+3. Choose a model to describe and fit the stationary series
+
+4. Forecast against this model and transform the forecasts back, reversing the order of transformations.
+
+5. In many scientific and engineering applications, identifying sinsoidal waves of different frequencies (i.e. Fourier components) will prove to be very effective in modeling the time series and deriving a forecast.
+
+This section of this essay will present a time series, and preform the steps specifed in the general approach. Some simple descriptive models are applied.  Then, the results and implications of these simple and descriptive models are considered. The following section of the essay (the analysis section) will present more complex models and their fit and forrecasting power will be considered.
+
+## Time Series
+
+The Nile river dataset included in the R install provides measurements for the annual flow of the river at the Ashwan Dam.  These measurements were taken over the period 1871-1970.
+
+Let's follow the general approach outlined earlier. Here is a plot of these measurements
+
+```{r}
+plot.ts(Nile)
+# show the mean and sd
+mean(Nile)
+sd(Nile)
+```
+
+The diagram shows the raw data with a mean of 919.35 with a standard deviation of 169.23.  We don't have units but will assume these are in cubic feet / minute. Inspection of the diagram reveals that there are no extream data points. So, our next step is to identify any trend components. To do this we'll apply a simple moving average filter to the raw data.  The moving average will average groups of data points together, in effect smoothing the data.
+
+```{r}
+nile3pt = SMA(Nile, n=3)
+plot.ts(nile3pt)
+nile6pt = SMA(Nile, n=6)
+plot.ts(nile6pt)
+nile8pt = SMA(Nile, n=8)
+plot.ts(nile8pt)
+```
+
+The 8 point moving average may be too aggresive in smoothing the dataset. Using the 6 point moving average we see the dataset without the trend.
+
+```{r}
+niledt = Nile - nile6pt
+plot.ts(niledt)
+```
+
+Notice how the plotted data now falls within the range -400 - +300? That is the effect of applying the moving average.
+
+To further explore time series and R's capability to work with time series data, let's examine the AirPassenger dataset in detail. AirPassengers is the monthly totals of international airline passengers from 1949 to 1960. First, let's plot it.
+
+```{r}
+plot.ts(AirPassengers)
+```
+
+Notice the strong trend and stong seasonal components of the series.  The trend is easy to see: the graph just keeps growing larger. The seasonal components are easy to spot also, in the middle of each year the graph spikes. We could attack the trend component of the AirPassengers dataset with moving averages, but it would take a while to identify the right lag (SMA(AirPassengers, n=?)).  Instead, let's use another R function called "decompose", which is in the TTR package.
+
+```{r}
+ap = decompose(AirPassengers)
+plot(ap)
+```
+
+The "decompose" package has extracted the trend, seasonal, and random components for us. To see what AirPassengers looks like in a form that is ready to forecast against we simple subtract out what we don't want.
+
+```{r}
+apdt = AirPassengers - ap$trend - ap$seasonal
+plot.ts(apdt)
+```
+
+Even with the trend subtracted out we still see the growth of air travel from the 1950's to the 1960's. The next section will make attempts at forecasting.
+
+## Simple models
+
+There are many ways to form a forecast of a time series. This essay will only cover a few. We'll start with some very simple forecasting techniques and progress to more complex techniques once we understand the short falls of the simple methods.
+
+As stated previously, time series decompose into a time based periodic component, a random component and some noise we have to remove before we can use the data. The random component comes from the experimental setup and errors in measurement. In order to forecast a time series we choose a periodic function that closely fits the time series we are investigating.  Science and engineering applications generally use additive or multiplicative combinations of sine waves and there is a whole class of mathematics called Fourier series that deal with combining waves. Business applications tend to use more simple models.
+
+### Naive and Mean Methods
+
+The most simplistic forecast of a time series you can make is to assume that the next point in the series will be the same as the previous. Consider the next diagram. We use the R function naive (located in the fpp package).
+
+```{r}
+plot(naive(apdt, h=20))
+```
+
+The figure shows a forecast of the next 20 periods in the detrended and seasonally adjusted AirPassengers time series. Notice 3 things:
+ 
+* The bright blue line shows the forecasted points. It is a straight line for 20 periods.
+* The dark grey area surrounding the blue line reflects the error bars or confidence interval for the defaul values used in the naive function call.
+* The light grey area represents the prediction interval containing the forecast given the level of confidence used by default.
+
+Another forecasting method is to use the average of the last few data points. The following figure shows the detrended and seasonally adjusted AirPassengers time series using the mean to forecast passegner data 20 periods into the future.
+
+```{r}
+plot(meanf(apdt, h=20))
+```
+
+The shading in the diagram is the same for the naive method: blue line is the forecasted points, dark grey area is the confidence interval (95%), and the light grey area is the prediction interval.
+
+Let's compare these two forecasts. First I need to create a window to put the original time series (i.e. the detrended, seasonally adjusted series) in. The window will allow us to check to see how well the forecast did by starting the forecast at 1958 (instead of 1960). Then I'll compute the mean and naive forecasts and finally we'll plot them.
+
+```{r}
+airP = window(apdt, start=1949, end=1958-0.1)
+# forecast out 2 years
+men = meanf(airP, h=24)
+nav = naive(airP, h=24)
+plot(apdt, main="Air Passenger Miles 1949-1962", type="o")
+lines(men$mean, col=2)
+lines(nav$mean, col=4)
+legend("topright",lty=1,col=c(4,2,3), legend=c("Mean method","Naive method"))
+```
+
+For this time series these forecasts are not that good.
+
+## Exponential Smoothing
+
+Exponential smoothing is a widely used forecasting technique. It uses a weighted average of a small set of past values (or observations) from the time series to generate a forecast. These weights are exponentially decayed as older values are used and thus makes their impact on the forecast diminish. Said another way the newest observations impact the forecast the most.
+
+```{r, fig.width=8}
+apWin = window(apdt, start=1958, end=1960)
+fit1 = ses(apWin, alpha=0.2, initial="simple", h=3)
+fit2 = ses(apWin, alpha=0.6, initial="simple", h=3)
+fit3 = ses(apWin, h=3)
+plot(fit1, ylab="Air Passengers", type="o")
+lines(fitted(fit1), col="blue", type="o")
+lines(fitted(fit2), col="red", type="o")
+lines(fitted(fit3), col="green", type="o")
+lines(fit1$mean, col="blue", type="o")
+lines(fit2$mean, col="red", type="o")
+lines(fit3$mean, col="green", type="o")
+legend("topleft",lty=1, col=c(1,"blue","red","green"), 
+        c("data", expression(alpha == 0.2), expression(alpha == 0.6),
+          expression(alpha == 0.99)),pch=1)
+
+```
+
+While it is hard to see, each of these forecasts are shifted slightly to the right of the original (the black line). This comes from the fact that the algorithm is using past observations to predict each future data point. The above calls "simple exponential smoothing" 3 times with different alpha and beta parameters.  The "fit3" call allows the "ses" function to compute the alpha and beta parameters from the data. Inspecting the output of fit3$model we can get the alpha value R found (i.e. the 0.99 in the legend).
+
+Fit3 is the best fit since it follows the original detrended and seasonally adjusted data. 
+
+# Conclusion
+
+Time series forecasting can be rewarding but the modeler must be careful to understand what each algorithm is doing. This essay only touched on a small fraction of the methods possible.

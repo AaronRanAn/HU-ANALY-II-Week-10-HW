@@ -1,0 +1,97 @@
+---
+title: "HW10 Forecast"
+author: "Aaron"
+date: "July 20, 2016"
+output: 
+  html_document: 
+    highlight: haddock
+    theme: cosmo
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+```{r message=F, warning=F}
+
+library(ggplot2)
+library(ggfortify)
+library(dplyr)
+library(gridExtra)
+library(forecast)
+
+data("AirPassengers")
+data("EuStockMarkets")
+
+```
+
+all the time series plot in this work will be **fortified** by `ggplot` and `ggfortify`.
+
+`AirPassengers` and `EuStockMarkets` data are already `ts` object, so skip the `ts()` steps. 
+
+### Using `decompose`
+
+```{r}
+
+AirPassengers %>% 
+    decompose() %>% 
+    autoplot()
+
+```
+
+```{r warning=F}
+
+EuStockMarkets[,1] %>% 
+    decompose() %>% 
+    autoplot()
+
+```
+
+### Use `HoltWinters()` with different alpha and beta value 
+
+```{r}
+
+iter_hw = function(i, j, data=AirPassengers) {
+    
+   data %>% 
+        HoltWinters(alpha = i, beta = j, gamma = NULL) %>% 
+        autoplot() + 
+        ggtitle(paste0("alpha = ", i, " | beta = ", j))
+    
+}
+
+```
+
+try different `alpha` with `beta` as null
+
+```{r}
+
+grid.arrange(iter_hw(0.25, NULL), iter_hw(0.5, NULL), iter_hw(0.75, NULL), iter_hw(1, NULL), 
+             ncol = 2, nrow = 2)
+```
+
+We can try different beta too, same thing, this time with `EuStockMarkets` and alpha = 0.5
+
+```{r}
+
+grid.arrange(
+    iter_hw(0.5, 0.25, EuStockMarkets[,1]), 
+    iter_hw(0.5, 0.5, EuStockMarkets[,1]), 
+    iter_hw(0.5, 0.75, EuStockMarkets[,1]), 
+    iter_hw(0.5, 1, EuStockMarkets[,1]), 
+    ncol = 2, nrow = 2)
+
+
+```
+
+### now try `predict()` with arima for better prediction
+
+```{r}
+
+AirPassengers %>% 
+    auto.arima() %>% 
+    forecast(level = c(95), h = 50) %>% 
+    autoplot()
+
+```
+
